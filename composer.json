@@ -1,0 +1,5 @@
+{
+    "require": {
+        "zlatov/tree": "~1.2.0"
+    }
+}
