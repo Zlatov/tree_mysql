@@ -80,13 +80,13 @@ function create_schema()
 {
     global $pdo, $config;
     $sql = sprintf(
-        file_get_contents('./sql/create_schema.sql'),
+        file_get_contents(__DIR__ . '/../sql/create_schema.sql'),
         $config['dbName']
     );
     try {
         $pdo->exec($sql);
     } catch (PDOException $e) {
-        echo "<p>{$e->getMessage()}</p>";
+        echo "<p>{$e->errorInfo[2]}</p>";
         die();
     }
     echo "<p>База данных {$config['dbName']} создана.</p>";
@@ -98,20 +98,26 @@ function create_tables()
     global $pdo, $config;
     try {
         $sql = sprintf(
-            file_get_contents('./sql/create_tables.sql'),
+            file_get_contents(__DIR__ . '/../sql/create_tables.sql'),
             $config['table_tree'],
             $config['table_tree_relation']
         );
         $pdo->exec($sql);
         $sql = sprintf(
-            file_get_contents('./sql/triggers.sql'),
+            file_get_contents(__DIR__ . '/../sql/triggers.sql'),
+            $config['table_tree'],
+            $config['table_tree_relation']
+        );
+        $pdo->exec($sql);
+        $sql = sprintf(
+            file_get_contents(__DIR__ . '/../sql/procedures.sql'),
             $config['table_tree'],
             $config['table_tree_relation']
         );
         $pdo->exec($sql);
         echo "<p>Таблицы, процедуры и триггреы созданы.</p>";
     } catch (PDOException $e) {
-        echo "<p>{$e->getMessage()}</p>";
+        echo "<p>{$e->errorInfo[2]}</p>";
         die();
     }
 }
@@ -121,20 +127,23 @@ function insert_test()
     global $pdo, $config;
     try {
         $sql = sprintf(
-            file_get_contents('./sql/insert_test.sql'),
+            file_get_contents(__DIR__ . '/../sql/insert_test.sql'),
             $config['table_tree']
         );
         $pdo->exec($sql);
         echo "<p>Тестовые данные вставлены.</p>";
     } catch (PDOException $e) {
-        echo "<p>{$e->getMessage()}</p>";
-        die();
+        die("<p>{$e->errorInfo[2]}</p>");
     }
 }
 
 function add()
 {
     global $pdo, $config;
+    if (empty($_POST['header'])) {
+        echo "<p>Не задан header.</p>";
+        return;
+    }
     try {
         $pdo->exec("START TRANSACTION;");
         $sql = sprintf(
@@ -148,15 +157,43 @@ function add()
         $pdo->exec("COMMIT;");
     } catch (PDOException $e) {
         $pdo->exec("ROLLBACK;");
-        die("<p>{$e->getMessage()}</p>");
+        die("<p>{$e->errorInfo[2]}</p>");
     }
     echo "<p>Элемент добавлен.</p>";
+}
+
+function delete()
+{
+    global $pdo, $config;
+    if (empty($_POST['id'])) {
+        echo "<p>Не задан id.</p>";
+        return;
+    }
+    try {
+        $pdo->exec("START TRANSACTION;");
+        $sql = sprintf(
+            '
+                DELETE FROM `%s`
+                WHERE `id` = :id;
+            ',
+            $config['table_tree']
+        );
+        $stmt = $pdo->prepare($sql);
+        $stmt->bindValue(':id', $_POST['id'], PDO::PARAM_INT);
+        $stmt->execute();
+        $pdo->exec("COMMIT;");
+    } catch (PDOException $e) {
+        $pdo->exec("ROLLBACK;");
+        die("<p>{$e->errorInfo[2]}</p>");
+    }
+    echo "<p>Что-то удалено.</p>";
 }
 
 function select_descendants()
 {
     global $pdo, $config;
     if (empty($_POST['select_descendants_id'])) {
+        echo "<p>Не задан id.</p>";
         return;
     }
     $sql = sprintf(
@@ -183,6 +220,7 @@ function select_ancestors()
 {
     global $pdo, $config;
     if (empty($_POST['select_ancestors_id'])) {
+        echo "<p>Не задан id.</p>";
         return;
     }
     $sql = sprintf(
@@ -209,20 +247,33 @@ function select_ancestors()
 function move()
 {
     global $pdo, $config;
-    if (empty($_POST['eid'])||empty($_POST['tid'])) {
+    if (empty($_POST['eid'])) {
+        echo "<p>Не задан id перемещаемого элемента.</p>";
         return;
     }
-    $sql = sprintf(
-        '
-            UPDATE `%s`
-            SET `pid` = :tid
-            WHERE `id` = :eid;
-        ',
-        $config['table_tree']
-    );
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindValue(':eid', $_POST['eid'], PDO::PARAM_INT);
-    $stmt->bindValue(':tid', $_POST['tid'], PDO::PARAM_INT);
-    $stmt->execute();
-    echo "<p>Элемент перемещён:</p>";
+    try {
+        $pdo->exec("START TRANSACTION;");
+        $sql = sprintf(
+            '
+                UPDATE `%s`
+                SET `pid` = :tid
+                WHERE `id` = :eid;
+            ',
+            $config['table_tree']
+        );
+        $stmt = $pdo->prepare($sql);
+        $stmt->bindValue(':eid', $_POST['eid'], PDO::PARAM_INT);
+        $stmt->bindValue(':tid', (!empty($_POST['tid']))?$_POST['tid']:NULL, PDO::PARAM_INT);
+        $stmt->execute();
+        echo "<p>Элемент перемещён.</p>";
+        $sql = sprintf('call %1$s_update_level_moved_descendants(:id)', $config['table_tree']);
+        $stmt = $pdo->prepare($sql);
+        $stmt->bindValue(':id', $_POST['eid'], PDO::PARAM_INT);
+        $stmt->execute();
+        $pdo->exec("COMMIT;");
+        echo "<p>Уровни потомков изменены.</p>";
+    } catch (PDOException $e) {
+        $pdo->exec("ROLLBACK;");
+        die("<p>{$e->errorInfo[2]}</p>");
+    }
 }

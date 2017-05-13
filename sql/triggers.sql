@@ -68,11 +68,6 @@ trigger_label:BEGIN
 	-- Если родитель изменился.
 	IF NOT OLD.`pid` <=> NEW.`pid` THEN
 
-		-- Нельзя перемещать в себя
-		IF OLD.`id` = NEW.`pid` THEN
-			SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Нельзя перемещать в себя.';
-		END IF;
-
 		-- Нельзя перемещать в своих потомков
 		SELECT count(*)
 		INTO count_descendant
@@ -99,6 +94,8 @@ trigger_label:BEGIN
 		DElETE FROM `%2$s`
 		WHERE `did` = OLD.`id`;
 
+		IF NEW.`pid` IS NOT NULL THEN
+
 		-- Вставляем связи между перемещаемым элементом с новыми предками
 		INSERT INTO `%2$s` (`aid`, `did`)
 			SELECT `aid`, OLD.`id`
@@ -119,22 +116,20 @@ trigger_label:BEGIN
 			FROM `%2$s` r1
 			WHERE r1.`aid` = OLD.`id`;
 
-		-- Обновляем уровни перемещенных элементов
+		-- Обновляем уровень перемещаемого элемента
 		-- Определяем смещение по уровню
-		SELECT CAST(t.`level` AS SIGNED) - CAST(tt.`level` AS SIGNED) INTO delta_level
-		FROM %1$s t
-		LEFT JOIN %1$s tt ON tt.`id` = OLD.`id`
-		WHERE t.`id` = NEW.`pid`;
+		SELECT CAST(`newparent`.`level` + 1 AS SIGNED) - CAST(`moveditem`.`level` AS SIGNED) INTO delta_level
+		FROM `%1$s` `newparent`
+		LEFT JOIN `%1$s` `moveditem` ON `moveditem`.`id` = OLD.`id`
+		WHERE `newparent`.`id` = NEW.`pid`;
 
-		SET NEW.`level` = OLD.`level` + delta_level;
-		-- SET NEW.header = 'haha';
-
-		-- UPDATE %1$s t
-		-- LEFT JOIN %2$s tr ON tr.`did` = t.`id`
-		-- SET `level` = `level` + delta_level
-		-- WHERE
-		-- 	tr.`aid` = element_id
-		-- 	OR t.`id` = element_id;
+		IF delta_level <> 0
+		THEN
+			SET NEW.`level` = OLD.`level` + delta_level;
+		END IF;
+		ELSE
+			SET NEW.`level` = 1;
+		END IF;
 
 	END IF;
 END;
