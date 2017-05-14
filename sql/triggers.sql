@@ -46,17 +46,27 @@ BEGIN
 	DECLARE count_childrens INT DEFAULT 0;
 
 	-- Проверить существование наследников.
-	SELECT count(`id`)
-	INTO count_childrens
-	FROM `%1$s`
-	WHERE `pid` = OLD.`id`;
+	-- SELECT count(`id`)
+	-- INTO count_childrens
+	-- FROM `%1$s`
+	-- WHERE `pid` = OLD.`id`;
 
-	IF count_childrens > 0 THEN
-		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Нельзя удалять вместе с детьми.';
-	END IF;
+	-- IF count_childrens > 0 THEN
+	-- 	SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Нельзя удалять вместе с детьми.';
+	-- END IF;
 
-	DElETE FROM `%2$s`
-	WHERE `aid` = OLD.`id` OR `did` = OLD.`id`;
+	-- DElETE FROM `%2$s`
+	-- WHERE `aid` = OLD.`id` OR `did` = OLD.`id`;
+
+	DELETE `descendants`
+	FROM `%2$s` `find_descendants_id`
+	LEFT JOIN `%2$s` `descendants` ON `descendants`.`did` = `find_descendants_id`.`did`
+	WHERE `find_descendants_id`.`aid` = OLD.`id`;
+
+	DELETE `find_rel_to_removed`
+	FROM `%2$s` `find_rel_to_removed`
+	WHERE `find_rel_to_removed`.`did` = OLD.`id`;
+
 END;
 
 -- Перед обновлением структуры обновляем связи
