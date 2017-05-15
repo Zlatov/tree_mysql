@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS `%1$s` (
   `pid` INT unsigned NULL DEFAULT NULL,
   `level` INT unsigned NOT NULL,
   `header` VARCHAR(180) NOT NULL,
+  `order` INT unsigned NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_%1$s_header` (`header` ASC)
 )

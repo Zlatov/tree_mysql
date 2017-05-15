@@ -69,10 +69,9 @@ function check_tables_exist()
 function get_items()
 {
     global $pdo, $config;
-    $sql = sprintf("SELECT * FROM `%s`;", $config['table_tree']);
+    $sql = sprintf("SELECT * FROM `%s` ORDER BY `order` ASC, `id` ASC;", $config['table_tree']);
     $stmt = $pdo->query($sql);
     $tree = $stmt->fetchAll();
-    shuffle($tree);
     return $tree;
 }
 
@@ -272,6 +271,50 @@ function move()
         $stmt->execute();
         $pdo->exec("COMMIT;");
         echo "<p>Уровни потомков изменены.</p>";
+    } catch (PDOException $e) {
+        $pdo->exec("ROLLBACK;");
+        die("<p>{$e->errorInfo[2]}</p>");
+    }
+}
+
+function order_after()
+{
+    global $pdo, $config;
+    if (empty($_POST['id'])||empty($_POST['after_id'])) {
+        echo "<p>Не задан id.</p>";
+        return;
+    }
+    try {
+        $pdo->exec("START TRANSACTION;");
+        $sql = sprintf('CALL %1$s_order_after(:id, :after_id)', $config['table_tree']);
+        $stmt = $pdo->prepare($sql);
+        $stmt->bindValue(':id', $_POST['id'], PDO::PARAM_INT);
+        $stmt->bindValue(':after_id', $_POST['after_id'], PDO::PARAM_INT);
+        $stmt->execute();
+        $pdo->exec("COMMIT;");
+        echo "<p>Элемент поставлен.</p>";
+    } catch (PDOException $e) {
+        $pdo->exec("ROLLBACK;");
+        die("<p>{$e->errorInfo[2]}</p>");
+    }
+}
+
+function order_first()
+{
+    global $pdo, $config;
+    if (empty($_POST['id'])) {
+        echo "<p>Не задан id.</p>";
+        return;
+    }
+    try {
+        $pdo->exec("START TRANSACTION;");
+        $sql = sprintf('CALL %1$s_order_first(:id, :pid)', $config['table_tree']);
+        $stmt = $pdo->prepare($sql);
+        $stmt->bindValue(':id', $_POST['id'], PDO::PARAM_INT);
+        $stmt->bindValue(':pid', empty($_POST['pid'])?NULL:$_POST['pid'], PDO::PARAM_INT);
+        $stmt->execute();
+        $pdo->exec("COMMIT;");
+        echo "<p>Элемент поставлен.</p>";
     } catch (PDOException $e) {
         $pdo->exec("ROLLBACK;");
         die("<p>{$e->errorInfo[2]}</p>");

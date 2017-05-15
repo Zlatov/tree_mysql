@@ -60,12 +60,35 @@
 <form action="/php/right.php" method="post" target="frame_right">
 	<fieldset>
 		<legend>Удалить элемент</legend>
-        <label>id: 
-            <input type="number" name="id" placeholder="1|2|3...)" min="1">
-        </label>
+		<label>id: 
+			<input type="number" name="id" placeholder="1|2|3...)" min="1">
+		</label>
 		рекурсивно: <input type="hidden" name="recursively" value="0"><input type="checkbox" name="recursively" value="1">
 		<button type="submit" name="submitForm" value="delete">Удалить</button>
 	</fieldset>
 </form>
-<h2>Добавить ордер</h2>
+<form action="/php/right.php" method="post" target="frame_right">
+	<fieldset>
+		<legend>Поставить элемент после</legend>
+		<label>элемент с id: 
+			<input type="number" name="id" placeholder="1|2|3...)" min="1">
+		</label>
+		<label>после id: 
+			<input type="number" name="after_id" placeholder="1|2|3...)" min="1">
+		</label>
+		<button type="submit" name="submitForm" value="order_after">Поставить</button>
+	</fieldset>
+</form>
+<form action="/php/right.php" method="post" target="frame_right">
+	<fieldset>
+		<legend>Поставить элемент в начало</legend>
+		<label>элемент с id: 
+			<input type="number" name="id" placeholder="1|2|3...)" min="1">
+		</label>
+		<label>в начало элемента id: 
+			<input type="number" name="pid" placeholder="1|2|3...)" min="1">
+		</label>
+		<button type="submit" name="submitForm" value="order_first">Поставить</button>
+	</fieldset>
+</form>
 <h2>Добавить тесты!!!</h2>
