@@ -29,6 +29,13 @@
 </form>
 <form action="/php/right.php" method="post" target="frame_right">
 	<fieldset>
+		<legend>Добавить записей</legend>
+		<input type="number" name="count" placeholder="1|2|3..." min="1">
+		<button type="submit" name="submitForm" value="insert_million">Добавить</button>
+	</fieldset>
+</form>
+<form action="/php/right.php" method="post" target="frame_right">
+	<fieldset>
 		<legend>Добавление</legend>
 		в id: <input type="number" name="pid" placeholder="1|2|3..." min="1">
 		header: <input type="text" name="header" placeholder="header" value="Новый элемент">

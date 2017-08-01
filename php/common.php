@@ -75,6 +75,15 @@ function get_items()
     return $tree;
 }
 
+function get_count()
+{
+    global $pdo, $config;
+    $sql = sprintf("SELECT count(id) FROM `%s`;", $config['table_tree']);
+    $stmt = $pdo->query($sql);
+    $count = $stmt->fetchColumn(0);
+    return $count;
+}
+
 function create_schema()
 {
     global $pdo, $config;
@@ -130,6 +139,57 @@ function insert_test()
             $config['table_tree']
         );
         $pdo->exec($sql);
+        echo "<p>Тестовые данные вставлены.</p>";
+    } catch (PDOException $e) {
+        die("<p>{$e->errorInfo[2]}</p>");
+    }
+}
+
+function insert_million()
+{
+    global $pdo, $config;
+
+    try {
+        $sql_length = 1000;
+        $sql = '';
+        $count = intval($_POST['count']);
+        if (!$count)
+        {
+            return null;
+        }
+        $levels = ceil(log($count));
+        $level = 1;
+        $count_level = ceil($count/$levels);
+        $count_on_level = $count_level*$level;
+        for ($i=1; $i <= $count; $i++) {
+            if (($i-1)%$sql_length===0) {
+                $sql.= 'INSERT INTO `%s` (`id`, `pid`, `header`) VALUES ';
+            }
+            if ($i>$count_on_level) {
+                $level++;
+                $count_on_level = $count_level*$level;
+            }
+            if ($level===1) {
+                $from = 0;
+                $to = 0;
+                $pid = 'NULL';
+            } else {
+                $from = $count_level*($level-1)-$count_level+1;
+                $to = $count_level*($level-1);
+                $pid = mt_rand($from, $to);
+            }
+            $sql.= ($i===$count||$i%$sql_length===0)?"($i, $pid, 'e$i');":"($i, $pid, 'e$i'),";
+            if ($i===$count||$i%$sql_length===0) {
+                $sql = sprintf(
+                    $sql,
+                    $config['table_tree']
+                );
+                // echo $sql.'<br>';
+                $pdo->exec($sql);
+                $sql = '';
+            }
+        }
+
         echo "<p>Тестовые данные вставлены.</p>";
     } catch (PDOException $e) {
         die("<p>{$e->errorInfo[2]}</p>");

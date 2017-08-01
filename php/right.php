@@ -16,10 +16,15 @@ if (isset($_POST['submitForm'])) {
 }
 if (check_schema_select()) {
 	if (check_tables_exist()) {
-		$flat = get_items();
-		$nested = Tree::to_nested($flat);
-		$html = Tree::to_html($nested, ['tpl_li' => '<li>??header?? <small>#??id??</small> <small>^??level??</small> <small>↓??order??</small>']);
-		echo $html;
+		$count = get_count();
+		if ($count>30000) {
+			echo "Браузер не выведет такое количество нод ($count).";
+		} else {
+			$flat = get_items();
+			$nested = Tree::to_nested($flat);
+			$html = Tree::to_html($nested, ['tpl_li' => '<li>??header?? <small>#??id??</small> <small>^??level??</small> <small>↓??order??</small>']);
+			echo $html;
+		}
 	}
 }
 
