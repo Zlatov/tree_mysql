@@ -2,6 +2,9 @@ DROP PROCEDURE IF EXISTS `%1$s_update_level_moved_descendants`;
 DROP PROCEDURE IF EXISTS `%1$s_order_after`;
 DROP PROCEDURE IF EXISTS `%1$s_order_first`;
 DROP PROCEDURE IF EXISTS `%1$s_reorder_cildrens`;
+DROP PROCEDURE IF EXISTS `%1$s_select_all`;
+DROP PROCEDURE IF EXISTS `%1$s_select_childrens`;
+DROP PROCEDURE IF EXISTS `%1$s_count_childrens`;
 -- DELIMITER ;;
 
 CREATE PROCEDURE `%1$s_update_level_moved_descendants`(IN param_id INT(11))
@@ -89,4 +92,69 @@ procedure_label:BEGIN
 		ORDER BY `ch`.`order` ASC, `ch`.`id` ASC
 	) `childrens_and_row_number` ON `childrens_and_row_number`.`chid` = `childrens`.`id`
 	SET `childrens`.`order` = `childrens_and_row_number`.`row_number`;
+END;
+
+CREATE PROCEDURE `%1$s_select_all`()
+procedure_label:BEGIN
+	SELECT
+		`id`,
+		`pid`,
+		`header`,
+		`level`,
+		`order`
+	FROM `%1$s`
+	ORDER BY `order` ASC, `id` ASC;
+END;
+
+CREATE PROCEDURE `%1$s_select_childrens`(IN param_pid INT(11))
+procedure_label:BEGIN
+	DECLARE parent_id INT(11) DEFAULT NULL;
+	SELECT `id` INTO parent_id
+	FROM `%1$s`
+	WHERE `id` = param_pid;
+	IF parent_id IS NULL THEN
+		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Попытка найти детей несуществующего родителя.';
+	END IF;
+	SELECT
+		`id`,
+		`pid`,
+		`header`,
+		`level`,
+		`order`
+	FROM `%1$s`
+	WHERE `pid` = param_pid
+	ORDER BY `order` ASC, `id` ASC;
+END;
+
+CREATE PROCEDURE `%1$s_count_childrens`(IN param_id INT(11))
+procedure_label:BEGIN
+	DECLARE an_existing_item_id INT(11) DEFAULT NULL;
+	-- Проверяем существует ли сам элемент
+	SELECT `id` INTO an_existing_item_id
+	FROM `%1$s`
+	WHERE `id` = param_id;
+	IF an_existing_item_id IS NULL THEN
+		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Попытка найти детей несуществующего родителя.';
+		LEAVE procedure_label;
+	END IF;
+	-- Выбираем количество детей
+	SELECT
+		COUNT(`id`) as `count`
+	FROM `%1$s`
+	WHERE `pid` = param_id;
+END;
+
+CREATE PROCEDURE `%1$s_delete_element`(IN param_id INT(11))
+procedure_label:BEGIN
+	DECLARE an_existing_item_id INT(11) DEFAULT NULL;
+	-- Проверяем существует ли сам элемент
+	SELECT `id` INTO an_existing_item_id
+	FROM `%1$s`
+	WHERE `id` = param_id;
+	IF an_existing_item_id IS NULL THEN
+		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Попытка удалить несуществующий элемент.';
+		LEAVE procedure_label;
+	END IF;
+	-- Удаляем
+	DELETE FROM `%1$s` WHERE `id` = param_id;
 END;

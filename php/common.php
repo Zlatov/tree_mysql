@@ -44,10 +44,8 @@ function check_schema_select()
     $db = $pdo->query('SELECT database();')->fetchColumn();
 
     if (!$db) {
-        echo "<p>База данных не выбрана.</p>";
         return false;
     } else {
-        echo "<p>Выбрана база данных: $db</p>";
         return true;
     }
 }
@@ -66,13 +64,38 @@ function check_tables_exist()
     return true;
 }
 
-function get_items()
+function get_all()
 {
     global $pdo, $config;
-    $sql = sprintf("SELECT * FROM `%s` ORDER BY `order` ASC, `id` ASC;", $config['table_tree']);
-    $stmt = $pdo->query($sql);
-    $tree = $stmt->fetchAll();
-    return $tree;
+    try {
+        $sql = sprintf('CALL %1$s_select_all()', $config['table_tree']);
+        $stmt = $pdo->query($sql);
+        $all = $stmt->fetchAll();
+        return $all;
+    } catch (PDOException $e) {
+        die("<p>{$e->errorInfo[2]}</p>");
+    }
+}
+
+function get_childrens()
+{
+    global $pdo, $config;
+    if (empty($_POST['pid'])) {
+        echo '<p>Не верный идентификатор.</p>';
+        return null;
+    }
+    $pid = intval($_POST['pid']);
+    try {
+        $sql = sprintf('CALL %1$s_select_childrens(:pid)', $config['table_tree']);
+        $stmt = $pdo->prepare($sql);
+        $stmt->bindValue(':pid', $pid, PDO::PARAM_INT);
+        $stmt->execute();
+        $childrens = $stmt->fetchAll();
+        echo "<p>Дети выбраны.</p>";
+        echo Tree::to_html(Tree::to_nested($childrens, ['root_id' => $_POST['pid']]));
+    } catch (PDOException $e) {
+        die("<p>{$e->errorInfo[2]}</p>");
+    }
 }
 
 function get_count()
@@ -134,6 +157,10 @@ function insert_test()
 {
     global $pdo, $config;
     try {
+        $stmt = $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
+        $stmt = $pdo->exec("TRUNCATE TABLE ${config['table_tree_relation']};");
+        $stmt = $pdo->exec("TRUNCATE TABLE ${config['table_tree']};");
+        $stmt = $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
         $sql = sprintf(
             file_get_contents(__DIR__ . '/../sql/insert_test.sql'),
             $config['table_tree']
@@ -150,6 +177,11 @@ function insert_million()
     global $pdo, $config;
 
     try {
+        $stmt = $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
+        $stmt = $pdo->exec("TRUNCATE TABLE ${config['table_tree_relation']};");
+        $stmt = $pdo->exec("TRUNCATE TABLE ${config['table_tree']};");
+        $stmt = $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
+
         $sql_length = 1000;
         $sql = '';
         $count = intval($_POST['count']);
@@ -165,10 +197,6 @@ function insert_million()
             if (($i-1)%$sql_length===0) {
                 $sql.= 'INSERT INTO `%s` (`id`, `pid`, `header`) VALUES ';
             }
-            if ($i>$count_on_level) {
-                $level++;
-                $count_on_level = $count_level*$level;
-            }
             if ($level===1) {
                 $from = 0;
                 $to = 0;
@@ -177,6 +205,10 @@ function insert_million()
                 $from = $count_level*($level-1)-$count_level+1;
                 $to = $count_level*($level-1);
                 $pid = mt_rand($from, $to);
+            }
+            if ($i>$count_on_level) {
+                $level++;
+                $count_on_level = $count_level*$level;
             }
             $sql.= ($i===$count||$i%$sql_length===0)?"($i, $pid, 'e$i');":"($i, $pid, 'e$i'),";
             if ($i===$count||$i%$sql_length===0) {
@@ -192,7 +224,12 @@ function insert_million()
 
         echo "<p>Тестовые данные вставлены.</p>";
     } catch (PDOException $e) {
-        die("<p>{$e->errorInfo[2]}</p>");
+        echo "<p>";
+        echo $e->errorInfo[2];
+        echo "</p>";
+        echo '<pre>';
+        echo $e->getTraceAsString();
+        echo '</pre>';
     }
 }
 
@@ -216,7 +253,12 @@ function add()
         $pdo->exec("COMMIT;");
     } catch (PDOException $e) {
         $pdo->exec("ROLLBACK;");
-        die("<p>{$e->errorInfo[2]}</p>");
+        echo "<p>";
+        echo $e->errorInfo[2];
+        echo "</p>";
+        echo '<pre>';
+        echo $e->getTraceAsString();
+        echo '</pre>';
     }
     echo "<p>Элемент добавлен.</p>";
 }
@@ -228,24 +270,41 @@ function delete()
         echo "<p>Не задан id.</p>";
         return;
     }
+    $id = $_POST['id'];
+    $recursively = (isset($_POST['recursively'])&&$_POST['recursively']==='1')?true:false;
     try {
+        if (!$recursively) {
+            $sql = sprintf('CALL %1$s_count_childrens(:id)', $config['table_tree']);
+            $stmt = $pdo->prepare($sql);
+            $stmt->bindValue(':id', $id, PDO::PARAM_INT);
+            $stmt->execute();
+            $count = $stmt->fetchColumn();
+            if ($count>0) {
+                echo "<p>У элемента есть потомки, удалять нельзя.</p>";
+                return;
+            }
+        }
         $pdo->exec("START TRANSACTION;");
-        $sql = sprintf(
-            '
-                DELETE FROM `%s`
-                WHERE `id` = :id;
-            ',
-            $config['table_tree']
-        );
+        $sql = sprintf('CALL %1$s_delete_element(:id);', $config['table_tree']);
         $stmt = $pdo->prepare($sql);
-        $stmt->bindValue(':id', $_POST['id'], PDO::PARAM_INT);
+        $stmt->bindValue(':id', $id, PDO::PARAM_INT);
         $stmt->execute();
+        $delete_count = $stmt->rowCount();
         $pdo->exec("COMMIT;");
     } catch (PDOException $e) {
         $pdo->exec("ROLLBACK;");
-        die("<p>{$e->errorInfo[2]}</p>");
+        echo "<p>";
+        echo $e->errorInfo[2];
+        echo "</p>";
+        echo '<pre>';
+        echo $e->getTraceAsString();
+        echo '</pre>';
     }
-    echo "<p>Что-то удалено.</p>";
+    if ($delete_count>0) {
+        echo "<p>Элемент <var>$id</var> удалён.</p>";
+    } else {
+        echo "<p>Элемента <var>$id</var> не существовало.</p>";
+    }
 }
 
 function select_descendants()
@@ -270,7 +329,7 @@ function select_descendants()
     $stmt->execute();
     $flat = $stmt->fetchAll();
     $nested = Tree::to_nested($flat, ['root_id' => $_POST['select_descendants_id']]);
-    $html = Tree::to_html($nested, ['tpl_li' => '<li>??header?? <small>#??id??</small> <small>^??level??</small>']);
+    $html = Tree::to_html($nested, ['tpl_li' => '<li>??header?? <small>#??id??</small> <small>^??level??</small> <small>↓??order??</small>']);
     echo "<p>Потомки:</p>";
     echo $html;
 }
@@ -297,7 +356,7 @@ function select_ancestors()
     $stmt->execute();
     $flat = $stmt->fetchAll();
     $nested = Tree::to_nested($flat);
-    $html = Tree::to_html($nested, ['tpl_li' => '<li>??header?? <small>#??id??</small> <small>^??level??</small>']);
+    $html = Tree::to_html($nested, ['tpl_li' => '<li>??header?? <small>#??id??</small> <small>^??level??</small> <small>↓??order??</small>']);
     echo "<p>Предки:</p>";
     echo $html;
 }
@@ -333,7 +392,12 @@ function move()
         echo "<p>Уровни потомков изменены.</p>";
     } catch (PDOException $e) {
         $pdo->exec("ROLLBACK;");
-        die("<p>{$e->errorInfo[2]}</p>");
+        echo "<p>";
+        echo $e->errorInfo[2];
+        echo "</p>";
+        echo '<pre>';
+        echo $e->getTraceAsString();
+        echo '</pre>';
     }
 }
 
@@ -355,7 +419,12 @@ function order_after()
         echo "<p>Элемент поставлен.</p>";
     } catch (PDOException $e) {
         $pdo->exec("ROLLBACK;");
-        die("<p>{$e->errorInfo[2]}</p>");
+        echo "<p>";
+        echo $e->errorInfo[2];
+        echo "</p>";
+        echo '<pre>';
+        echo $e->getTraceAsString();
+        echo '</pre>';
     }
 }
 
@@ -377,6 +446,11 @@ function order_first()
         echo "<p>Элемент поставлен.</p>";
     } catch (PDOException $e) {
         $pdo->exec("ROLLBACK;");
-        die("<p>{$e->errorInfo[2]}</p>");
+        echo "<p>";
+        echo $e->errorInfo[2];
+        echo "</p>";
+        echo '<pre>';
+        echo $e->getTraceAsString();
+        echo '</pre>';
     }
 }
