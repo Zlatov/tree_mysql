@@ -86,8 +86,7 @@ trigger_label:BEGIN
 			r.`aid` = OLD.`id`
 			AND r.`did` = NEW.`pid`;
 
-		IF count_descendant > 0
-		THEN
+		IF count_descendant > 0 THEN
 			SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Нельзя перемещать в своих потомков.';
 		END IF;
 
@@ -106,37 +105,36 @@ trigger_label:BEGIN
 
 		IF NEW.`pid` IS NOT NULL THEN
 
-		-- Вставляем связи между перемещаемым элементом с новыми предками
-		INSERT INTO `%2$s` (`aid`, `did`)
-			SELECT `aid`, OLD.`id`
-			FROM `%2$s`
-			WHERE `did` = NEW.`pid`
-			UNION ALL
-			SELECT NEW.`pid`, OLD.`id`;
+			-- Вставляем связи между перемещаемым элементом с новыми предками
+			INSERT INTO `%2$s` (`aid`, `did`)
+				SELECT `aid`, OLD.`id`
+				FROM `%2$s`
+				WHERE `did` = NEW.`pid`
+				UNION ALL
+				SELECT NEW.`pid`, OLD.`id`;
 
-		-- Вставляем связи между предками нового родителя и потомками перемещаемго элемента
-		INSERT INTO `%2$s` (`aid`, `did`)
-			SELECT r1.`aid`, r2.`did`
-			FROM `%2$s` r1
-			CROSS JOIN `%2$s` r2
-			WHERE r1.`did` = NEW.`pid` AND r2.`aid` = OLD.`id`
-			-- А так же связи между новым родителем перемещаемого элемента и его потомками
-			UNION ALL
-			SELECT NEW.`pid`, r1.`did`
-			FROM `%2$s` r1
-			WHERE r1.`aid` = OLD.`id`;
+			-- Вставляем связи между предками нового родителя и потомками перемещаемго элемента
+			INSERT INTO `%2$s` (`aid`, `did`)
+				SELECT r1.`aid`, r2.`did`
+				FROM `%2$s` r1
+				CROSS JOIN `%2$s` r2
+				WHERE r1.`did` = NEW.`pid` AND r2.`aid` = OLD.`id`
+				-- А так же связи между новым родителем перемещаемого элемента и его потомками
+				UNION ALL
+				SELECT NEW.`pid`, r1.`did`
+				FROM `%2$s` r1
+				WHERE r1.`aid` = OLD.`id`;
 
-		-- Обновляем уровень перемещаемого элемента
-		-- Определяем смещение по уровню
-		SELECT CAST(`newparent`.`level` + 1 AS SIGNED) - CAST(`moveditem`.`level` AS SIGNED) INTO delta_level
-		FROM `%1$s` `newparent`
-		LEFT JOIN `%1$s` `moveditem` ON `moveditem`.`id` = OLD.`id`
-		WHERE `newparent`.`id` = NEW.`pid`;
+			-- Обновляем уровень перемещаемого элемента
+			-- Определяем смещение по уровню
+			SELECT CAST(`newparent`.`level` + 1 AS SIGNED) - CAST(`moveditem`.`level` AS SIGNED) INTO delta_level
+			FROM `%1$s` `newparent`
+			LEFT JOIN `%1$s` `moveditem` ON `moveditem`.`id` = OLD.`id`
+			WHERE `newparent`.`id` = NEW.`pid`;
 
-		IF delta_level <> 0
-		THEN
-			SET NEW.`level` = OLD.`level` + delta_level;
-		END IF;
+			IF delta_level <> 0 THEN
+				SET NEW.`level` = OLD.`level` + delta_level;
+			END IF;
 		ELSE
 			SET NEW.`level` = 1;
 		END IF;
